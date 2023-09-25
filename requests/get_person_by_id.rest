@@ -1,1 +1,1 @@
-GET http://localhost:3001/api/persons/10
+GET https://restless-waterfall-7905.fly.dev/api/persons/10
