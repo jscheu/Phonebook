@@ -1,12 +1,15 @@
+require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan')
 const cors = require('cors')
+const Person = require('./models/person')
 const app = express()
 
+app.use(express.static('dist'))
 app.use(express.json())
 app.use(cors())
-app.use(express.static('dist'))
 
+//Morgan logger
 morgan.token('body', (request, response) => {
     return JSON.stringify(request.body)
 })
@@ -21,102 +24,106 @@ app.use((request, response, next) => {
     }
 })
 
-let persons = [
-    { 
-      "id": 1,
-      "name": "Arto Hellas", 
-      "number": "040-123456"
-    },
-    { 
-      "id": 2,
-      "name": "Ada Lovelace", 
-      "number": "39-44-5323523"
-    },
-    { 
-      "id": 3,
-      "name": "Dan Abramov", 
-      "number": "12-43-234345"
-    },
-    { 
-      "id": 4,
-      "name": "Mary Poppendieck", 
-      "number": "39-23-6423122"
+app.get('/info', (request, response, next) => {
+    Person.countDocuments({})
+        .then(count => {
+            const personsInfo = count === 1
+                ? `Phonebook has info for ${count} person`
+                : `Phonebook has info for ${count} people`
+            const timeStamp = new Date().toISOString()
+
+            response.send(
+                `<div>
+                    <p>${personsInfo}</p>
+                    <p>${timeStamp}</p>
+                </div>`)
+        })
+        .catch(error => next(error))
+    
+})
+
+app.get('/api/persons', (request, response, next) => {
+    Person.find({})
+        .then(result => {
+            response.json(result)
+        })
+        .catch(error => next(error))
+})
+
+app.get('/api/persons/:id', (request, response, next) => {
+    Person.findById(request.params.id)
+        .then(person => {
+            if(person){
+                response.json(person)
+            } else {
+                response.status(404).end()
+            }
+        })
+        .catch(error => next(error))
+})
+
+app.post('/api/persons', (request, response, next) => {
+    const person = new Person({
+        name: request.body.name,
+        number: request.body.number
+    })
+
+    person.save()
+        .then(() => {
+            console.log(`added ${person.name} number ${person.number} to phonebook`)
+            response.json(person)
+        })
+        .catch(error => next(error))
+})
+
+app.put('/api/persons/:id', (request, response, next) => {
+    Person.findByIdAndUpdate(request.params.id,
+        { number: request.body.number },
+        { new: true })
+        .then(result => {
+            console.log('updated person')
+            console.log(result)
+            response.json(result)
+        })
+        .catch(error => next(error))
+})
+
+app.delete('/api/persons/:id', (request, response, next) => {
+    Person.findByIdAndRemove(request.params.id)
+        .then(result => {
+            if(result) {
+                console.log('delted person')
+                console.log(result)
+            } else {
+                console.log(`attempted to delete person by id: ${request.params.id}`)
+                console.log('no such person found')
+            }
+            response.status(204).end()
+        })
+        .catch(error => next(error))
+})
+
+app.get('/facvicon.ico', (request, response) => response.status(204).end())
+
+//Unknown endpoint
+app.use((request, response, next) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+})
+
+//Error handler
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+
+    if(error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id' })
     }
-]
 
-const generateId = () => {
-    let rand = Math.floor(
-        Math.random() * 10000
-    )
-
-    if(persons.find(p => p.id === rand)) {
-        rand = generateId()
-    }
-
-    return rand
+    next(error)
 }
 
-app.get('/info', (request, response) => {
-    const personsInfo = `Phonebook has info for ${persons.length} people`
-    const timeStamp = new Date().toISOString()
+app.use(errorHandler)
 
-    response.send(
-        `<div>
-            <p>${personsInfo}</p>
-            <p>${timeStamp}</p>
-        </div>`)
-})
-
-app.get('/api/persons', (request, response) => {
-    response.json(persons)
-})
-
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(p => p.id === id)
-
-    if(person) {
-        response.json(person)
-    } else {
-        response.status(404).end()
-    }
-})
-
-app.post('/api/persons', (request, response) => {
-    const person = request.body
-
-    if(!person.name) {
-        return response.status(400).json({
-            error: 'missing name'
-        })
-    } else if(!person.number) {
-        return response.status(400).json({
-            error: 'missing number'
-        })
-    }
-
-    if(persons.find(p =>
-        p.name.toLowerCase() === person.name.toLowerCase())) {
-        return response.status(400).json({
-            error: `phonebook already contains ${person.name}`
-        })
-    }
-
-    person.id = generateId()
-
-    persons = persons.concat(person)
-
-    response.json(person)
-})
-
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    persons = persons.filter(p => p.id !== id)
-
-    response.status(204).end()
-})
-
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
 })

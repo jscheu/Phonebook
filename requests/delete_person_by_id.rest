@@ -1,1 +1,1 @@
-DELETE https://restless-waterfall-7905.fly.dev/api/persons/2
+DELETE http://localhost:3001/api/persons/65130caa95df4a2bce4e7153
